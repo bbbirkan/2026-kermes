@@ -1,0 +1,57 @@
+# Kermes Configuration Example
+# Copy to ~/.kermes/config.yaml and fill in your API key.
+#
+# Get an OpenRouter key (supports 200+ models): https://openrouter.ai
+
+provider_url: https://openrouter.ai/api/v1/chat/completions
+api_key: sk-or-YOUR_KEY_HERE
+
+# --- Model Tiers ---
+# FAST  → simple factual queries, short answers   ($)
+# MID   → code generation, analysis               ($$)
+# BEST  → complex reasoning, long planning        ($$$)
+
+tiers:
+  fast:
+    model: deepseek/deepseek-v4-flash    # ~$0.14/M tokens
+  mid:
+    model: deepseek/deepseek-v4-pro      # ~$2.61/M tokens
+  best:
+    model: openai/gpt-5.5                # ~$17.50/M tokens
+
+# Alternative model suggestions:
+#   fast:  meta-llama/llama-3.3-70b-instruct  | google/gemini-2.5-flash
+#   mid:   mistralai/mistral-large            | z-ai/glm-4.7
+#   best:  anthropic/claude-opus-4-7          | x-ai/grok-4.20
+
+# --- Routing Rules ---
+routing:
+  simple_threshold: 50         # queries under 50 tokens → FAST
+  complex_threshold: 500       # queries over 500 tokens → BEST
+  force_best_keywords:
+    - "architect"
+    - "design system"
+    - "step by step"
+    - "write a full"
+    - "reason through"
+    - "implement from scratch"
+    - "research and summarize"
+
+# --- Context Compression ---
+compression:
+  enabled: true
+  threshold: 0.4        # compress when context > 40% of model max
+  target_ratio: 0.15    # target 15% of original after compression
+  protect_last_n: 12    # always keep last 12 messages uncompressed
+
+# --- Response Cache ---
+cache:
+  enabled: true
+  ttl_seconds: 3600     # cache lifetime (1 hour)
+  max_entries: 10000
+
+# --- Hermes Integration (optional) ---
+# If you have Hermes Agent installed, Kermes wraps it automatically.
+hermes:
+  enabled: false
+  path: /usr/local/lib/hermes-agent
