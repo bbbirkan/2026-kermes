@@ -1,123 +1,122 @@
-# CLI Orkestrasyon Araştırması — 2026-05-19
+# CLI Orchestration Research — 2026-05-19
 
-> Bu belge, Kermes'in gelecekteki "CLI Router" katmanı için yapılan
-> araştırma ve deneylerin özetidir. Sıfır API maliyetiyle çalışan
-> subscription-tabanlı orkestrasyon mümkün — aşağıda kanıtı var.
-
----
-
-## Vizyon: API Yerine CLI Subscription Katmanı
-
-Kermes şu an OpenRouter API'si üzerinden modellere gidiyor (her token para).
-Araştırılan alternatif: **CLI araçları subscription modlarıyla headless kullanmak.**
-
-```
-Mevcut Kermes:
-  Kullanıcı → Classifier → OpenRouter API → Model → Yanıt
-                            (token başına ücret)
-
-Potansiyel Kermes v2:
-  Kullanıcı → Classifier → CLI Router → claude / gemini / opencode → Yanıt
-                            (flat-rate subscription, token ücret yok)
-```
+> Research document for Kermes' future "CLI Router" layer.
+> Proof-of-concept complete: subscription-based orchestration with zero API cost works.
 
 ---
 
-## Mevcut CLI Araçları ve Durumları
+## Vision: CLI Subscription Layer Instead of API
+
+Kermes currently routes through OpenRouter API (pay per token).
+Researched alternative: **using CLI tools headlessly via their subscription modes.**
+
+```
+Current Kermes:
+  User → Classifier → OpenRouter API → Model → Response
+                       (billed per token)
+
+Potential Kermes v2:
+  User → Classifier → CLI Router → claude / gemini / opencode → Response
+                       (flat-rate subscription, zero per-token cost)
+```
+
+---
+
+## Available CLI Tools and Status
 
 ### 1. Claude Code CLI (`claude`)
 - **Subscription:** Anthropic Pro / Max
-- **Headless komutu:** `claude -p "prompt" --dangerously-skip-permissions --output-format text`
-- **Pipe:** ✅ Doğrudan çalışır
-- **Auth:** OAuth / keychain (API key gerektirmez)
-- **Asyncio:** ✅ `asyncio.create_subprocess_exec` ile sorunsuz
+- **Headless command:** `claude -p "prompt" --dangerously-skip-permissions --output-format text`
+- **Pipe:** ✅ Works directly
+- **Auth:** OAuth / keychain (no API key required)
+- **Asyncio:** ✅ Works with `asyncio.create_subprocess_exec`
 
 ```bash
-claude -p "görev" --dangerously-skip-permissions --output-format text
+claude -p "task" --dangerously-skip-permissions --output-format text
 ```
 
 ### 2. Google Gemini CLI (`gemini`)
-- **Subscription:** Google One / Gemini Advanced + ücretsiz tier
-- **Headless komutu:** `gemini --prompt "görev" --yolo`
-- **Pipe:** ✅ Doğrudan çalışır
-- **Auth:** `GOOGLE_API_KEY` veya OAuth
-- **Asyncio:** ✅ `asyncio.create_subprocess_exec` ile sorunsuz
-- **Model:** Gemini 2.5 Flash/Pro
+- **Subscription:** Google One / Gemini Advanced + free tier
+- **Headless command:** `gemini --prompt "task" --yolo`
+- **Pipe:** ✅ Works directly
+- **Auth:** `GOOGLE_API_KEY` or OAuth
+- **Asyncio:** ✅ Works with `asyncio.create_subprocess_exec`
+- **Model:** Gemini 2.5 Flash / Pro
 
 ```bash
-gemini --prompt "görev" --yolo
+gemini --prompt "task" --yolo
 ```
 
 ### 3. OpenCode CLI (`opencode`)
-- **Subscription:** OpenCode Zen / OpenCode Go üyeliği
-- **Headless komutu:** `opencode run --dangerously-skip-permissions "prompt"`
-- **Pipe:** ❌ TTY gerektiriyor — pipe'da boş çıktı!
-- **Çözüm:** `script -q -c "opencode run ..." /dev/null`
+- **Subscription:** OpenCode Zen / OpenCode Go
+- **Headless command:** `opencode run --dangerously-skip-permissions "prompt"`
+- **Pipe:** ❌ Requires TTY — silent when piped
+- **Fix:** `script -q -c "opencode run ..." /dev/null`
 - **Auth:** OpenCode Zen → DeepSeek v4 Pro
-- **Asyncio:** ✅ script wrapper ile sorunsuz
+- **Asyncio:** ✅ Works with script wrapper
 
 ```bash
-script -q -c "opencode run --dangerously-skip-permissions 'görev'" /dev/null
+script -q -c "opencode run --dangerously-skip-permissions 'task'" /dev/null
 ```
 
-**Kritik not:** OpenCode TTY olmadan sessiz kalıyor. Bu bir bug değil, tasarım — TUI tabanlı bir araç. `script` ile pseudo-TTY açmak çözüm.
+**Critical note:** OpenCode goes silent without a TTY. Not a bug — it's TUI-based by design. The `script` wrapper creates a pseudo-TTY and solves this completely.
 
 ---
 
-## Terminal Orchester v0.1 — Çalışan Demo
+## Terminal Orchester v0.1 — Working Demo
 
-**Dosya:** `/root/2026-orchester/terminal_orchester.py`
+**File:** `/root/2026-orchester/terminal_orchester.py`
 
-3 orkestrasyon modu, kanıtlanmış çalışıyor:
+Three orchestration modes, all tested and working:
 
-### PARALLEL modu (önerilen)
+### PARALLEL mode (recommended)
 ```
-Görev → Claude + OpenCode (eş zamanlı) → Gemini sentezi → Final
+Task → Claude + OpenCode (simultaneous) → Gemini synthesis → Final
 ```
-- En hızlı: 2 adım
-- Gemini iki perspektifi birleştirir
+- Fastest: 2 steps
+- Gemini merges both perspectives
 
-### CHAIN modu
+### CHAIN mode
 ```
-Görev → Claude → OpenCode (Claude'u görür) → Gemini (ikisini görür) → Final
+Task → Claude → OpenCode (sees Claude) → Gemini (sees both) → Final
 ```
-- Her ajan bir öncekinin çıktısını okur
-- Tartışma/revizyon dinamiği
+- Each agent reads the previous agent's output
+- Creates a debate/revision dynamic
 
-### SEQUENTIAL modu
+### SEQUENTIAL mode
 ```
-Görev → Gemini taslak → Claude + OpenCode eleştiri (paralel) → Gemini final
+Task → Gemini draft → Claude + OpenCode critique (parallel) → Gemini final
 ```
-- Gemini kendi taslağını eleştirilere göre düzeltir
-- En kapsamlı, en fazla adım
+- Gemini revises its own draft based on critique
+- Most thorough, most steps
 
 ---
 
-## Kermes'e Entegrasyon Önerisi
+## Integration Proposal for Kermes
 
-### CLI Tier'ı Ekle
+### Add a CLI Tier
 
-Mevcut `router.py` tier sistemi:
+Current `router.py` tier system:
 ```
-FAST  → DeepSeek Flash (OpenRouter API)
-MID   → DeepSeek Pro (OpenRouter API)
-BEST  → GPT-5.5 (OpenRouter API)
+FAST   → DeepSeek Flash (OpenRouter API)   ← billed per token
+MID    → DeepSeek Pro (OpenRouter API)     ← billed per token
+BEST   → GPT-5.5 (OpenRouter API)         ← billed per token
 ```
 
-Önerilen ek tier:
+Proposed additional tier:
 ```
-FAST   → DeepSeek Flash (OpenRouter API)      ← maliyet: token başına
-MID    → DeepSeek Pro (OpenRouter API)         ← maliyet: token başına
-BEST   → GPT-5.5 (OpenRouter API)             ← maliyet: token başına
+FAST   → DeepSeek Flash (OpenRouter API)   ← billed per token
+MID    → DeepSeek Pro (OpenRouter API)     ← billed per token
+BEST   → GPT-5.5 (OpenRouter API)         ← billed per token
 ---
-CLI_FAST   → OpenCode (DeepSeek v4 Pro)        ← maliyet: sıfır (subscription)
-CLI_MID    → Gemini (Gemini 2.5)               ← maliyet: sıfır (subscription)
-CLI_BEST   → Claude (Claude Sonnet/Opus)        ← maliyet: sıfır (subscription)
+CLI_FAST   → OpenCode (DeepSeek v4 Pro)    ← zero cost (subscription)
+CLI_MID    → Gemini (Gemini 2.5)           ← zero cost (subscription)
+CLI_BEST   → Claude (Claude Sonnet/Opus)   ← zero cost (subscription)
 ```
 
-Kullanıcı "subscription mod"u tercih ederse tüm trafik CLI tier'ına gider.
+When user enables "subscription mode," all traffic routes to the CLI tier.
 
-### Örnek `router.py` güncellemesi
+### Example `router.py` update
 
 ```python
 from enum import Enum
@@ -126,9 +125,9 @@ class Tier(Enum):
     FAST = "fast"
     MID = "mid"
     BEST = "best"
-    CLI_FAST = "cli_fast"    # OpenCode — sıfır maliyet
-    CLI_MID = "cli_mid"      # Gemini — sıfır maliyet
-    CLI_BEST = "cli_best"    # Claude — sıfır maliyet
+    CLI_FAST = "cli_fast"    # OpenCode — zero cost
+    CLI_MID = "cli_mid"      # Gemini — zero cost
+    CLI_BEST = "cli_best"    # Claude — zero cost
 
 CLI_BACKENDS = {
     Tier.CLI_FAST: ask_opencode,
@@ -137,15 +136,15 @@ CLI_BACKENDS = {
 }
 ```
 
-### Config eklentisi (`config.example.yaml`)
+### Config addition (`config.example.yaml`)
 
 ```yaml
 router:
-  mode: api          # "api" veya "cli" veya "hybrid"
+  mode: api          # "api", "cli", or "hybrid"
   cli:
-    fast: opencode   # DeepSeek v4 Pro — OpenCode Zen subscription
-    mid: gemini      # Gemini 2.5 — Google subscription
-    best: claude     # Claude Pro — Anthropic subscription
+    fast: opencode   # DeepSeek v4 Pro via OpenCode Zen subscription
+    mid: gemini      # Gemini 2.5 via Google subscription
+    best: claude     # Claude via Anthropic Pro subscription
   api:
     fast: deepseek/deepseek-v4-flash
     mid: deepseek/deepseek-v4-pro
@@ -154,47 +153,46 @@ router:
 
 ---
 
-## CLI Subscription vs API Maliyet Karşılaştırması
+## Cost Comparison: CLI Subscription vs API
 
-| Araç | API modu | Subscription modu |
+| Tool | API mode | Subscription mode |
 |------|----------|-------------------|
-| Claude | $3-15/M token | Claude Pro $20/ay flat |
-| Gemini | $0.075-2.5/M token | Google One $10/ay flat |
-| OpenCode | — | OpenCode Zen $10/ay flat |
-| Toplam | Kullanıma göre değişken | ~$40/ay sabit |
+| Claude | $3–15/M tokens | Claude Pro $20/mo flat |
+| Gemini | $0.075–2.5/M tokens | Google One $10/mo flat |
+| OpenCode | — | OpenCode Zen $10/mo flat |
+| **Total** | Variable, unbounded | ~$40/mo fixed |
 
-**Break-even:** Aylık ~3-5M token üzerinde subscription daha ucuz.
+**Break-even:** ~3–5M tokens/month. Above that, subscription wins.
 
 ---
 
-## Teknik Gereksinimler
+## Technical Requirements
 
 ```
-python3 asyncio      — eş zamanlı CLI çağrıları için
-shlex                — güvenli argüman quotelama
-script (bsd-compat)  — OpenCode için pseudo-TTY
-CLAUDE_CODE_BUBBLEWRAP=1  — root ortamda Claude için
+python3 asyncio      — concurrent CLI calls
+shlex                — safe argument quoting
+script (bsd-compat)  — pseudo-TTY for OpenCode
+CLAUDE_CODE_BUBBLEWRAP=1  — Claude on root servers
 ```
 
-Herhangi bir pip paketi gerektirmez — sadece stdlib.
+No pip packages required beyond stdlib.
 
 ---
 
-## Test Edilen Senaryo
+## Tested Scenario
 
-**Soru:** "AI otomasyon sistemi kurarken en kritik 3 teknik karar nedir?"
+**Question:** "What are the 3 most critical technical decisions when building an AI automation system?"
 
-**Sonuç (PARALLEL mod):**
-- Claude: 152 kelime analiz ✓
-- OpenCode: 169 kelime teknik perspektif ✓
-- Gemini: 276 kelime sentez ✓
-- Toplam süre: ~45 saniye
-- API maliyeti: **0 TL**
+**Result (PARALLEL mode):**
+- Claude: 152 words ✓
+- OpenCode: 169 words ✓
+- Gemini: 276 word synthesis ✓
+- Total time: ~45 seconds
+- API cost: **$0.00**
 
 ---
 
-## Referanslar
+## References
 
-- Çalışan kod: `/root/2026-orchester/terminal_orchester.py`
-- Test çıktıları: `/root/2026-orchester/debates/`
-- Hermes bilgi notu: `~/.hermes/skills/birkan-claude-parallel/terminal-orchester-v01.md`
+- Working code: `/root/2026-orchester/terminal_orchester.py`
+- Test outputs: `/root/2026-orchester/debates/`
