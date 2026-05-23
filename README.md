@@ -182,6 +182,31 @@ while routing everything else to the appropriate model.
 
 ---
 
+## Why not just AGY?
+
+AGY (Antigravity CLI) is Google's subscription-based AI coding assistant. Zero API cost, runs locally, powerful — but single-purpose.
+
+| | AGY | Kermes |
+|---|---|---|
+| Zero API cost (subscription) | ✅ | ✅ (delegates to AGY) |
+| Multi-platform messaging | ❌ | ✅ |
+| Intelligent model routing | ❌ | ✅ |
+| Context compression | ❌ | ✅ |
+| Works with non-Google models | ❌ | ✅ |
+
+Kermes can route **BEST-tier** queries to AGY (subscription, zero marginal cost) instead of paid APIs — the most expensive queries become free.
+
+```yaml
+# Use AGY as your zero-cost BEST tier
+tiers:
+  best:
+    provider: agy
+    model: subscription
+    max_cost_per_query: 0.00   # it's already paid for
+```
+
+---
+
 ## Install
 
 ```bash
