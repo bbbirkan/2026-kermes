@@ -54,22 +54,43 @@ So I built Kermes.
 
 ---
 
-## What it does
+## The core idea: two tracks
 
-Every message gets scored before it touches a model:
+Most routing tools assume you pay per token. Kermes doesn't.
+
+You already have subscriptions — Claude Pro, OpenCode Zen, AGY. Those subscriptions include CLI tools that run locally, spend zero API tokens, and cost nothing per query beyond what you already paid. They sit idle while your API meter runs.
+
+Kermes routes on one rule:
 
 ```
-Is it cached?   ──→  return instantly          (zero tokens, zero cost)
+Query comes in
      │
-     ▼
-How complex?
+     ├── starts with "$"? ──→  API track  (metered, any model you configure)
      │
-     ├── Simple  ──→  DeepSeek Flash  ($0.03/M)
-     ├── Medium  ──→  DeepSeek Pro    ($0.14/M)
-     └── Complex ──→  GPT-5.5 / Claude Opus  ($5–15/M)
+     └── no "$"? ──────────→  Orchester  (zero API cost)
 ```
 
-The right model. Every time. Zero configuration per query.
+**The Orchester** is three subscription CLIs working as one:
+
+```
+[Claude Code CLI]  ──┐
+                     ├──→ answer  (zero tokens spent)
+[OpenCode CLI]     ──┤
+                     │
+[AGY CLI]          ──┘
+```
+
+The Orchester decides internally how to handle the query — one CLI or all three, one round or several. Kermes doesn't need to know. It just routes.
+
+**The bill impact:**
+
+```
+Before:  every query → API → token meter running
+After:   most queries → Orchester → $0.00
+         "$..." queries → API → still metered, but far fewer
+```
+
+You pay for your subscriptions once. Kermes makes them earn it.
 
 ---
 
@@ -80,22 +101,19 @@ Same usage pattern, before and after:
 ```
                     BEFORE                  AFTER KERMES
                     ──────                  ────────────
-Simple queries      GPT-5.5   ████████      Flash    ██
-(60% of traffic)    $0.90/day               $0.06/day
+Regular queries     API       ████████      Orchester  ░░░░░░░░
+(~80% of traffic)  $2.40/day               $0.00/day
 
-Medium queries      GPT-5.5   ████████      Pro      ████
-(30% of traffic)    $1.20/day               $0.18/day
-
-Complex queries     GPT-5.5   ████████      Best     ████████
-(10% of traffic)    $0.80/day               $0.80/day
+"$" queries         API       ████████      API        ████████
+(~20% of traffic)  $0.60/day               $0.60/day
                     ──────────              ────────────────
-Daily               $2.90                   $1.04
-Monthly             $87                     $31
-                                            ↑ 64% less
+Daily               $3.00                   $0.60
+Monthly             $90                     $18
+                                            ↑ 80% less
 ```
 
-No capability lost. The hard questions still get the best model.
-The easy ones stop burning premium tokens.
+No capability lost. The Orchester uses the same models you subscribed to.
+The API meter only runs when you explicitly ask for it.
 
 ---
 
@@ -115,29 +133,30 @@ The easy ones stop burning premium tokens.
                              │
                              ▼
 ┌───────────────────────────────────────────────────────────┐
-│                  KERMES OPTIMIZER  ← NEW                  │
+│                  KERMES ROUTER  ← NEW                     │
 │                                                           │
 │   ┌───────────┐   ┌─────────────┐   ┌─────────────────┐  │
-│   │  CACHE    │   │ COMPRESSOR  │   │   CLASSIFIER    │  │
+│   │  CACHE    │   │ COMPRESSOR  │   │  "$" DETECTOR   │  │
 │   │           │   │             │   │                 │  │
-│   │ Seen it?  │   │ History 40% │   │ FAST/MID/BEST   │  │
-│   │ → free    │   │ → summarize │   │ per query       │  │
-│   └───────────┘   └─────────────┘   └─────────────────┘  │
-└────────────────────────────┬──────────────────────────────┘
-                             │
-                             ▼
-┌───────────────────────────────────────────────────────────┐
-│                    MODEL ROUTER                           │
-│                                                           │
-│  FAST ($)            MID ($$)           BEST ($$$)        │
-│  ─────────────       ──────────         ──────────────    │
-│  DeepSeek Flash      DeepSeek Pro       GPT-5.5           │
-│  GLM-4.7             Gemini 2.5 Flash   Claude Opus 4.7   │
-│  Llama 3.3 70B       Mistral Large      Grok 4            │
-│                                                           │
-│  < 50 tokens         50–500 tokens      > 500 tokens      │
-│  factual · quick     code · analysis    reasoning · long  │
-└────────────────────────────┬──────────────────────────────┘
+│   │ Seen it?  │   │ History 40% │   │ $ → API track   │  │
+│   │ → free    │   │ → summarize │   │ no $ → Orch.    │  │
+│   └───────────┘   └─────────────┘   └────────┬────────┘  │
+└────────────────────────────────────────────────┼──────────┘
+                        ┌───────────────────────┘
+                        │
+              ┌─────────┴──────────┐
+              ▼                    ▼
+┌─────────────────────┐  ┌─────────────────────────────────┐
+│   ORCHESTER TRACK   │  │          API TRACK               │
+│   (zero API cost)   │  │        (metered)                 │
+│                     │  │                                  │
+│  Claude Code CLI    │  │  DeepSeek · GPT · Claude API     │
+│  OpenCode CLI       │  │  Gemini · Grok · any OpenAI-     │
+│  AGY CLI            │  │  compatible endpoint             │
+│                     │  │                                  │
+│  subscription only  │  │  pay per token                   │
+└──────────┬──────────┘  └────────────────┬─────────────────┘
+           └──────────────────────────────┘
                              │
                              ▼
                     Answer  +  Cost log
